@@ -2,10 +2,11 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
-# 📥 Cargar archivo
+# Cargar archivo
 df = pd.read_excel('datos_meteorologicos.xlsx')
 
-# 🧹 Limpiar columnas
+# Limpiar columnas
+
 def limpiar_columna(col, unidad):
     return pd.to_numeric(
         df[col].astype(str)
@@ -16,36 +17,71 @@ def limpiar_columna(col, unidad):
     )
 
 df['Fecha'] = pd.to_datetime(df['Fecha'])
+
+# Calcular semana del ciclo y número de ciclo
+
+# Inicializar columnas
+df['Semana del ciclo'] = np.nan
+df['Ciclo'] = np.nan
+
+# Detectar ciclos por año
+ciclos = []
+for year in sorted(df['Fecha'].dt.year.unique()):
+    base = pd.to_datetime(f'{year}-07-18')
+    if base.weekday() != 0:
+        inicio_ciclo = base + pd.DateOffset(days=(7 - base.weekday()))
+    else:
+        inicio_ciclo = base
+    fin_ciclo = inicio_ciclo + pd.DateOffset(weeks=52)
+    ciclos.append((inicio_ciclo, fin_ciclo))
+
+# Asignar semana del ciclo y número de ciclo
+for i, (inicio, fin) in enumerate(ciclos):
+    mask = (df['Fecha'] >= inicio) & (df['Fecha'] < fin)
+    df.loc[mask, 'Semana del ciclo'] = ((df.loc[mask, 'Fecha'] - inicio).dt.days // 7) + 1
+    df.loc[mask, 'Ciclo'] = i + 1
+
+df['Semana del ciclo'] = df['Semana del ciclo'].astype('Int64')
+df['Ciclo'] = df['Ciclo'].astype('Int64')
+
+# Limpieza de variables
+
+
 df['Temperature'] = limpiar_columna('Temperature (°C)', '°C')
 df['Humidity'] = limpiar_columna('Humidity (%)', '%')
 df['Precip'] = limpiar_columna('Precip. Accum. (mm)', 'mm')
 df['Solar'] = limpiar_columna('Solar Radiation (W/m²)', 'w/m²')
 df['Wind'] = limpiar_columna('Speed (km/h)', 'km/h')
-# 💧 Precipitación estimada por intervalo (mm) = tasa (mm/hr) × 0.25
 df['Precip_Estimada'] = limpiar_columna('Precip. Rate. (mm/hr)', 'mm') * 0.25
-
-# ☀️ Radiación solar estimada por intervalo (Wh/m²) = W/m² × 0.25h
 df['Radiacion_Estimada'] = limpiar_columna('Solar Radiation (W/m²)', 'W/m²') * 0.25
 
-# 📆 Agregar columnas de semana y día
+#calcular el hdd grados dia de calefaccion
+
+T_base = 10  # puedes cambiarlo si se requiere otro valor
+df['HDD_15min'] = (T_base - df['Temperature']).clip(lower=0) * 0.25
+
+
+# Semana y día
+
 df['Semana'] = df['Fecha'].dt.to_period('W').apply(lambda r: r.start_time)
 df['Dia'] = df['Fecha'].dt.date
 
-# ✅ Días con sol reales
+# Días con sol
 dias_con_sol = df.groupby('Dia')['Solar'].max().reset_index()
 dias_con_sol['Soleado'] = dias_con_sol['Solar'] > 0
 dias_con_sol['Semana'] = pd.to_datetime(dias_con_sol['Dia']).dt.to_period('W').apply(lambda r: r.start_time)
 conteo_dias_soleados = dias_con_sol.groupby('Semana')['Soleado'].sum().reset_index()
 conteo_dias_soleados.columns = ['Semana', 'Días soleados (Solar > 0 W/m²)']
 
-# ✅ Días con heladas reales (< 4 °C): solo 1 vez por día si cumple
+# Días con heladas
 temperaturas_dia = df.groupby(['Dia', 'Semana'])['Temperature'].min().reset_index()
 temperaturas_dia['Dia_frio'] = temperaturas_dia['Temperature'] < 4
 conteo_dias_frios = temperaturas_dia.groupby('Semana')['Dia_frio'].sum().reset_index()
 conteo_dias_frios.columns = ['Semana', 'Días con heladas (< 4 °C)']
 
-# 🧠 Resumen semanal
+# Resumen semanal
 resumen = df.groupby('Semana').agg(
+    Ciclo=('Ciclo', 'first'),
     temperatura_media=('Temperature', 'mean'),
     temperatura_min=('Temperature', 'min'),
     temperatura_max=('Temperature', 'max'),
@@ -54,14 +90,13 @@ resumen = df.groupby('Semana').agg(
     precipitacion_total=('Precip', 'max'),
     solar_promedio=('Solar', 'mean'),
     precipitacion_estimada_total=('Precip_Estimada', 'sum'),
-    radiacion_estimada_total=('Radiacion_Estimada', 'sum')
+    radiacion_estimada_total=('Radiacion_Estimada', 'sum'),
+    hdd_total=('HDD_15min', 'sum')
 ).reset_index()
 
-# ➕ Fusionar heladas y días soleados
 resumen = resumen.merge(conteo_dias_frios, on='Semana', how='left')
 resumen = resumen.merge(conteo_dias_soleados, on='Semana', how='left')
 
-# 🏷️ Renombrar columnas
 resumen = resumen.rename(columns={
     'temperatura_media': 'Temperatura media (°C)',
     'temperatura_min': 'Temperatura mínima (°C)',
@@ -71,14 +106,16 @@ resumen = resumen.rename(columns={
     'precipitacion_total': 'Precipitación máx. diaria (mm)',
     'solar_promedio': 'Radiación solar promedio (W/m²)',
     'precipitacion_estimada_total': 'Precipitación estimada (mm)',
-    'radiacion_estimada_total': 'Radiación estimada (Wh/m²)'
+    'radiacion_estimada_total': 'Radiación estimada (Wh/m²)',
+    'hdd_total': 'Grados-día calefacción (HDD)'
 })
 
-# 📄 Descripción de columnas
+# Descripción de columnas
 descripcion = pd.DataFrame({
     'Columna': resumen.columns,
     'Descripción': [
         'Inicio de la semana (lunes)',
+        'Número de ciclo agrícola (inicia desde 1, luego 2, etc.)',
         'Promedio semanal de temperatura en grados Celsius',
         'Temperatura mínima semanal en °C',
         'Temperatura máxima semanal en °C',
@@ -88,20 +125,19 @@ descripcion = pd.DataFrame({
         'Promedio semanal de radiación solar en W/m²',
         'Total semanal estimado de precipitación (mm), calculado como tasa × 0.25',
         'Total semanal estimado de energía solar recibida en Wh/m²',
+        'Total semanal de Heating Degree DaysGrados-día de calefacción: suma de (T_base - T) * 0.25 cada 15 minutos',
         'Cantidad de días con heladas (temperatura menor a 4 °C)',
         'Cantidad de días con radiación solar registrada (mayor a 0 W/m²)'
     ]
 })
 
-# 📊 Gráfico de clima en barras
+# Gráficos
 plt.figure(figsize=(12, 6))
-bar_width = 0.25
 x = np.arange(len(resumen['Semana']))
-
+bar_width = 0.25
 plt.bar(x - bar_width, resumen['Temperatura media (°C)'], width=bar_width, label='Temp. media (°C)')
 plt.bar(x, resumen['Humedad media (%)'], width=bar_width, label='Humedad media (%)')
 plt.bar(x + bar_width, resumen['Viento promedio (km/h)'], width=bar_width, label='Viento promedio (km/h)')
-
 plt.title('Resumen semanal: temperatura, humedad y viento')
 plt.xlabel('Semana')
 plt.ylabel('Valor')
@@ -112,7 +148,6 @@ plt.tight_layout()
 plt.savefig('grafico_clima_barras.png')
 plt.close()
 
-# 📊 Gráfico de radiación solar
 plt.figure(figsize=(12, 6))
 plt.bar(resumen['Semana'].dt.strftime('%Y-%m-%d'), resumen['Radiación solar promedio (W/m²)'], color='orange')
 plt.title('Radiación solar promedio semanal')
@@ -124,7 +159,6 @@ plt.tight_layout()
 plt.savefig('grafico_solar_barras.png')
 plt.close()
 
-# 📊 Gráfico de días con heladas
 plt.figure(figsize=(12, 6))
 plt.bar(resumen['Semana'].dt.strftime('%Y-%m-%d'), resumen['Días con heladas (< 4 °C)'], color='skyblue')
 plt.title('Días con heladas por semana (temperatura < 4 °C)')
@@ -136,8 +170,7 @@ plt.tight_layout()
 plt.savefig('grafico_heladas_barras.png')
 plt.close()
 
-
-# 💾 Guardar en Excel con imágenes
+# Guardar en Excel
 from openpyxl import load_workbook
 from openpyxl.drawing.image import Image
 
@@ -146,7 +179,6 @@ try:
         resumen.to_excel(writer, index=False, sheet_name='Resumen semanal')
         descripcion.to_excel(writer, index=False, sheet_name='Descripción')
 
-        # Insertar gráficos
         writer.book.create_sheet('Gráficos')
         sheet = writer.book['Gráficos']
         img1 = Image('grafico_clima_barras.png')
@@ -154,11 +186,11 @@ try:
         img3 = Image('grafico_heladas_barras.png')
         sheet.add_image(img1, 'A1')
         sheet.add_image(img2, 'A30')
-        sheet.add_image(img3, 'A59')  # Puedes ajustar esta posición si se sobrepone
+        sheet.add_image(img3, 'A59')
 
         writer.book.save('resumen_semanal_clima.xlsx')
 
-    print("✅ Archivo actualizado con gráficos de barras e irradiación solar promedio.")
+    print("✅ Archivo actualizado con gráficos y resumen semanal.")
 
 except PermissionError:
     print("❌ No se pudo guardar el archivo. Asegúrate de cerrar 'resumen_semanal_clima.xlsx'.")
