@@ -21,6 +21,11 @@ df['Humidity'] = limpiar_columna('Humidity (%)', '%')
 df['Precip'] = limpiar_columna('Precip. Accum. (mm)', 'mm')
 df['Solar'] = limpiar_columna('Solar Radiation (W/m²)', 'w/m²')
 df['Wind'] = limpiar_columna('Speed (km/h)', 'km/h')
+# 💧 Precipitación estimada por intervalo (mm) = tasa (mm/hr) × 0.25
+df['Precip_Estimada'] = limpiar_columna('Precip. Rate. (mm/hr)', 'mm') * 0.25
+
+# ☀️ Radiación solar estimada por intervalo (Wh/m²) = W/m² × 0.25h
+df['Radiacion_Estimada'] = limpiar_columna('Solar Radiation (W/m²)', 'W/m²') * 0.25
 
 # 📆 Agregar columnas de semana y día
 df['Semana'] = df['Fecha'].dt.to_period('W').apply(lambda r: r.start_time)
@@ -47,7 +52,9 @@ resumen = df.groupby('Semana').agg(
     humedad_media=('Humidity', 'mean'),
     viento_promedio=('Wind', 'mean'),
     precipitacion_total=('Precip', 'max'),
-    solar_promedio=('Solar', 'mean')
+    solar_promedio=('Solar', 'mean'),
+    precipitacion_estimada_total=('Precip_Estimada', 'sum'),
+    radiacion_estimada_total=('Radiacion_Estimada', 'sum')
 ).reset_index()
 
 # ➕ Fusionar heladas y días soleados
@@ -62,7 +69,9 @@ resumen = resumen.rename(columns={
     'humedad_media': 'Humedad media (%)',
     'viento_promedio': 'Viento promedio (km/h)',
     'precipitacion_total': 'Precipitación máx. diaria (mm)',
-    'solar_promedio': 'Radiación solar promedio (W/m²)'
+    'solar_promedio': 'Radiación solar promedio (W/m²)',
+    'precipitacion_estimada_total': 'Precipitación estimada (mm)',
+    'radiacion_estimada_total': 'Radiación estimada (Wh/m²)'
 })
 
 # 📄 Descripción de columnas
@@ -77,6 +86,8 @@ descripcion = pd.DataFrame({
         'Promedio semanal de velocidad del viento en km/h',
         'Total de precipitación semanal acumulada en mm',
         'Promedio semanal de radiación solar en W/m²',
+        'Total semanal estimado de precipitación (mm), calculado como tasa × 0.25',
+        'Total semanal estimado de energía solar recibida en Wh/m²',
         'Cantidad de días con heladas (temperatura menor a 4 °C)',
         'Cantidad de días con radiación solar registrada (mayor a 0 W/m²)'
     ]
