@@ -183,10 +183,10 @@ descripcion = pd.DataFrame({
         'Total de precipitación semanal acumulada en mm',
         'Promedio semanal de radiación solar en W/m²',
         'Total semanal estimado de precipitación (mm), calculado como tasa × 0.25',
-        'Total semanal estimado de energía solar recibida en Wh/m²',
-        'Total semanal de Heating Degree DaysGrados-día de calefacción: suma de (T_base - T) * 0.25 cada 15 minutos',
         'Acumulado de precipitación estimada en los 60 días anteriores',
+        'Total semanal estimado de energía solar recibida en Wh/m²',
         'Acumulado de radiación estimada en los 60 días anteriores',
+        'Total semanal de Heating Degree DaysGrados-día de calefacción: suma de (T_base - T) * 0.25 cada 15 minutos',
         'Acumulado de grados-día de calefacción en los 60 días anteriores',
         'Cantidad de días con heladas (temperatura menor a 4 °C)',
         'Cantidad de días con radiación solar registrada (mayor a 0 W/m²)'
