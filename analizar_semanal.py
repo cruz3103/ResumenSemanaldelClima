@@ -232,6 +232,45 @@ plt.tight_layout()
 plt.savefig('grafico_heladas_barras.png')
 plt.close()
 
+# --- GRÁFICAS DE ACUMULADOS 60 DÍAS ---
+
+# Gráfico 1: Precipitación acumulada últimos 60 días
+plt.figure(figsize=(12, 6))
+plt.plot(resumen['Semana'], resumen['Precipitación estimada acumulada últimos 60 días (mm)'], marker='o', color='blue')
+plt.title('Precipitación estimada acumulada (últimos 60 días)')
+plt.xlabel('Semana')
+plt.ylabel('mm')
+plt.grid(True)
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.savefig('grafico_precip_60d.png')
+plt.close()
+
+# Gráfico 2: Radiación acumulada últimos 60 días
+plt.figure(figsize=(12, 6))
+plt.plot(resumen['Semana'], resumen['Radiación estimada acumulada últimos 60 días (Wh/m²)'], marker='o', color='orange')
+plt.title('Radiación acumulada estimada (últimos 60 días)')
+plt.xlabel('Semana')
+plt.ylabel('Wh/m²')
+plt.grid(True)
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.savefig('grafico_radiacion_60d.png')
+plt.close()
+
+# Gráfico 3: HDD acumulado últimos 60 días
+plt.figure(figsize=(12, 6))
+plt.plot(resumen['Semana'], resumen['HDD acumulado últimos 60 días'], marker='o', color='green')
+plt.title('Grados-día calefacción acumulados (últimos 60 días)')
+plt.xlabel('Semana')
+plt.ylabel('HDD')
+plt.grid(True)
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.savefig('grafico_hdd_60d.png')
+plt.close()
+
+
 # Guardar en Excel
 from openpyxl import load_workbook
 from openpyxl.drawing.image import Image
@@ -249,6 +288,17 @@ try:
         sheet.add_image(img1, 'A1')
         sheet.add_image(img2, 'A30')
         sheet.add_image(img3, 'A59')
+
+         # Nueva hoja con acumulados 60 días
+        writer.book.create_sheet('Acumulados 60d')
+        sheet_acum = writer.book['Acumulados 60d']
+        img4 = Image('grafico_precip_60d.png')
+        img5 = Image('grafico_radiacion_60d.png')
+        img6 = Image('grafico_hdd_60d.png')
+        sheet_acum.add_image(img4, 'A1')
+        sheet_acum.add_image(img5, 'A30')
+        sheet_acum.add_image(img6, 'A59')
+
 
         writer.book.save('resumen_semanal_clima.xlsx')
 
