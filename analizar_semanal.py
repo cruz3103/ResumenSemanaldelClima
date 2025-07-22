@@ -5,8 +5,7 @@ import matplotlib.pyplot as plt
 # Cargar archivo
 df = pd.read_excel('datos_meteorologicos.xlsx')
 
-# Limpiar columnas
-
+# Función para limpiar columnas
 def limpiar_columna(col, unidad):
     return pd.to_numeric(
         df[col].astype(str)
@@ -16,11 +15,10 @@ def limpiar_columna(col, unidad):
         errors='coerce'
     )
 
+# Procesamiento de datos
 df['Fecha'] = pd.to_datetime(df['Fecha'])
 
 # Calcular semana del ciclo y número de ciclo
-
-# Inicializar columnas
 df['Semana del ciclo'] = np.nan
 df['Ciclo'] = np.nan
 
@@ -45,8 +43,6 @@ df['Semana del ciclo'] = df['Semana del ciclo'].astype('Int64')
 df['Ciclo'] = df['Ciclo'].astype('Int64')
 
 # Limpieza de variables
-
-
 df['Temperature'] = limpiar_columna('Temperature (°C)', '°C')
 df['Humidity'] = limpiar_columna('Humidity (%)', '%')
 df['Precip'] = limpiar_columna('Precip. Accum. (mm)', 'mm')
@@ -66,14 +62,24 @@ df = df.sort_values('Fecha')
 df['Dia'] = pd.to_datetime(df['Fecha'].dt.date)
 hdd_diario = df.groupby('Dia')['HDD_15min'].sum().reset_index()
 hdd_diario = hdd_diario.sort_values('Dia')
-
-# Acumulado de HDD en los 60 días anteriores
-
 hdd_diario['HDD_60d_acumulado'] = hdd_diario['HDD_15min'].rolling(window=60, min_periods=1).sum()
-
 
 # Fusionar con el DataFrame principal
 df = df.merge(hdd_diario[['Dia', 'HDD_60d_acumulado']], on='Dia', how='left')
+
+# --- Precipitación estimada acumulada últimos 60 días ---
+precip_diaria = df.groupby('Dia')['Precip_Estimada'].sum().reset_index()
+precip_diaria = precip_diaria.sort_values('Dia')
+precip_diaria['Precip_60d_acumulada'] = precip_diaria['Precip_Estimada'].rolling(window=60, min_periods=1).sum()
+
+# --- Radiación estimada acumulada últimos 60 días ---
+rad_diaria = df.groupby('Dia')['Radiacion_Estimada'].sum().reset_index()
+rad_diaria = rad_diaria.sort_values('Dia')
+rad_diaria['Radiacion_60d_acumulada'] = rad_diaria['Radiacion_Estimada'].rolling(window=60, min_periods=1).sum()
+
+# Fusionar al DataFrame principal
+df = df.merge(precip_diaria[['Dia', 'Precip_60d_acumulada']], on='Dia', how='left')
+df = df.merge(rad_diaria[['Dia', 'Radiacion_60d_acumulada']], on='Dia', how='left')
 
 # Semana
 df['Semana'] = df['Fecha'].dt.to_period('W').apply(lambda r: r.start_time)
@@ -91,7 +97,6 @@ temperaturas_dia['Dia_frio'] = temperaturas_dia['Temperature'] < 4
 conteo_dias_frios = temperaturas_dia.groupby('Semana')['Dia_frio'].sum().reset_index()
 conteo_dias_frios.columns = ['Semana', 'Días con heladas (< 4 °C)']
 
-# Resumen semanal con nuevo campo
 # Resumen semanal
 resumen = df.groupby('Semana').agg(
     Ciclo=('Ciclo', 'first'),
@@ -104,7 +109,9 @@ resumen = df.groupby('Semana').agg(
     solar_promedio=('Solar', 'mean'),
     precipitacion_estimada_total=('Precip_Estimada', 'sum'),
     radiacion_estimada_total=('Radiacion_Estimada', 'sum'),
-    hdd_total=('HDD_15min', 'sum')
+    hdd_total=('HDD_15min', 'sum'),
+    precipitacion_60d_final=('Precip_60d_acumulada', 'last'),
+    radiacion_60d_final=('Radiacion_60d_acumulada', 'last')
 ).reset_index()
 
 # Acumulado de HDD en las últimas 8 semanas (~60 días)
@@ -126,11 +133,41 @@ resumen = resumen.rename(columns={
     'solar_promedio': 'Radiación solar promedio (W/m²)',
     'precipitacion_estimada_total': 'Precipitación estimada (mm)',
     'radiacion_estimada_total': 'Radiación estimada (Wh/m²)',
-    'hdd_total': 'Grados-día calefacción (HDD)'
+    'hdd_total': 'Grados-día calefacción (HDD)',
+    'precipitacion_60d_final': 'Precipitación estimada acumulada últimos 60 días (mm)',
+    'radiacion_60d_final': 'Radiación estimada acumulada últimos 60 días (Wh/m²)',
 })
 
-print(resumen[['Semana', 'HDD acumulado últimos 60 días']].head(140))
+# Reordenar columnas según preferencia del usuario
+cols = resumen.columns.tolist()
 
+# Seleccionar y reordenar
+
+orden_personalizado = [
+    'Semana',
+    'Ciclo',
+    'Temperatura media (°C)',
+    'Temperatura mínima (°C)',
+    'Temperatura máxima (°C)',
+    'Humedad media (%)',
+    'Viento promedio (km/h)',
+    'Precipitación máx. diaria (mm)',
+    'Radiación solar promedio (W/m²)',
+    'Precipitación estimada (mm)',
+    'Precipitación estimada acumulada últimos 60 días (mm)',
+    'Radiación estimada (Wh/m²)',
+    'Radiación estimada acumulada últimos 60 días (Wh/m²)',
+    'Grados-día calefacción (HDD)',
+    'HDD acumulado últimos 60 días',
+    'Días con heladas (< 4 °C)',
+    'Días soleados (Solar > 0 W/m²)'
+]
+
+# Reordenar solo si están todas las columnas
+resumen = resumen[[col for col in orden_personalizado if col in resumen.columns]]
+
+
+##print(resumen[['Semana', 'HDD acumulado últimos 60 días']].head(140))
 
 # Descripción de columnas
 descripcion = pd.DataFrame({
@@ -146,11 +183,13 @@ descripcion = pd.DataFrame({
         'Total de precipitación semanal acumulada en mm',
         'Promedio semanal de radiación solar en W/m²',
         'Total semanal estimado de precipitación (mm), calculado como tasa × 0.25',
+        'Acumulado de precipitación estimada en los 60 días anteriores',
         'Total semanal estimado de energía solar recibida en Wh/m²',
+        'Acumulado de radiación estimada en los 60 días anteriores',
         'Total semanal de Heating Degree DaysGrados-día de calefacción: suma de (T_base - T) * 0.25 cada 15 minutos',
+        'Acumulado de grados-día de calefacción en los 60 días anteriores',
         'Cantidad de días con heladas (temperatura menor a 4 °C)',
-        'Cantidad de días con radiación solar registrada (mayor a 0 W/m²)',
-        'Acumulado de grados-día de calefacción en los 60 días anteriores'
+        'Cantidad de días con radiación solar registrada (mayor a 0 W/m²)'
     ]
 })
 
@@ -217,5 +256,3 @@ try:
 
 except PermissionError:
     print("❌ No se pudo guardar el archivo. Asegúrate de cerrar 'resumen_semanal_clima.xlsx'.")
-
-    
