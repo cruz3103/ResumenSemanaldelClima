@@ -55,16 +55,28 @@ df['Wind'] = limpiar_columna('Speed (km/h)', 'km/h')
 df['Precip_Estimada'] = limpiar_columna('Precip. Rate. (mm/hr)', 'mm') * 0.25
 df['Radiacion_Estimada'] = limpiar_columna('Solar Radiation (W/m²)', 'W/m²') * 0.25
 
-#calcular el hdd grados dia de calefaccion
+# Calcular HDD como (T - T_base) * 0.25
+T_base = 10
+df['HDD_15min'] = (df['Temperature'] - T_base) * 0.25
 
-T_base = 10  # puedes cambiarlo si se requiere otro valor
-df['HDD_15min'] = (T_base - df['Temperature']).clip(lower=0) * 0.25
+# Asegurarse de que 'Fecha' esté ordenada
+df = df.sort_values('Fecha')
+
+# Calcular HDD diario
+df['Dia'] = pd.to_datetime(df['Fecha'].dt.date)
+hdd_diario = df.groupby('Dia')['HDD_15min'].sum().reset_index()
+hdd_diario = hdd_diario.sort_values('Dia')
+
+# Acumulado de HDD en los 60 días anteriores
+
+hdd_diario['HDD_60d_acumulado'] = hdd_diario['HDD_15min'].rolling(window=60, min_periods=1).sum()
 
 
-# Semana y día
+# Fusionar con el DataFrame principal
+df = df.merge(hdd_diario[['Dia', 'HDD_60d_acumulado']], on='Dia', how='left')
 
+# Semana
 df['Semana'] = df['Fecha'].dt.to_period('W').apply(lambda r: r.start_time)
-df['Dia'] = df['Fecha'].dt.date
 
 # Días con sol
 dias_con_sol = df.groupby('Dia')['Solar'].max().reset_index()
@@ -79,6 +91,7 @@ temperaturas_dia['Dia_frio'] = temperaturas_dia['Temperature'] < 4
 conteo_dias_frios = temperaturas_dia.groupby('Semana')['Dia_frio'].sum().reset_index()
 conteo_dias_frios.columns = ['Semana', 'Días con heladas (< 4 °C)']
 
+# Resumen semanal con nuevo campo
 # Resumen semanal
 resumen = df.groupby('Semana').agg(
     Ciclo=('Ciclo', 'first'),
@@ -94,9 +107,15 @@ resumen = df.groupby('Semana').agg(
     hdd_total=('HDD_15min', 'sum')
 ).reset_index()
 
+# Acumulado de HDD en las últimas 8 semanas (~60 días)
+resumen = resumen.sort_values('Semana')
+resumen['HDD acumulado últimos 60 días'] = resumen['hdd_total'].rolling(window=8, min_periods=1).sum()
+
+# Agregar conteo de heladas y días soleados
 resumen = resumen.merge(conteo_dias_frios, on='Semana', how='left')
 resumen = resumen.merge(conteo_dias_soleados, on='Semana', how='left')
 
+# Renombrar columnas
 resumen = resumen.rename(columns={
     'temperatura_media': 'Temperatura media (°C)',
     'temperatura_min': 'Temperatura mínima (°C)',
@@ -109,6 +128,9 @@ resumen = resumen.rename(columns={
     'radiacion_estimada_total': 'Radiación estimada (Wh/m²)',
     'hdd_total': 'Grados-día calefacción (HDD)'
 })
+
+print(resumen[['Semana', 'HDD acumulado últimos 60 días']].head(140))
+
 
 # Descripción de columnas
 descripcion = pd.DataFrame({
@@ -127,7 +149,8 @@ descripcion = pd.DataFrame({
         'Total semanal estimado de energía solar recibida en Wh/m²',
         'Total semanal de Heating Degree DaysGrados-día de calefacción: suma de (T_base - T) * 0.25 cada 15 minutos',
         'Cantidad de días con heladas (temperatura menor a 4 °C)',
-        'Cantidad de días con radiación solar registrada (mayor a 0 W/m²)'
+        'Cantidad de días con radiación solar registrada (mayor a 0 W/m²)',
+        'Acumulado de grados-día de calefacción en los 60 días anteriores'
     ]
 })
 
@@ -194,3 +217,5 @@ try:
 
 except PermissionError:
     print("❌ No se pudo guardar el archivo. Asegúrate de cerrar 'resumen_semanal_clima.xlsx'.")
+
+    
