@@ -112,7 +112,6 @@ resumen = df.groupby('Semana').agg(
     hdd_total=('HDD_15min', 'sum'),
     precipitacion_60d_final=('Precip_60d_acumulada', 'last'),
     radiacion_60d_final=('Radiacion_60d_acumulada', 'last')
-
 ).reset_index()
 
 # Acumulado de HDD en las últimas 8 semanas (~60 días)
@@ -138,6 +137,35 @@ resumen = resumen.rename(columns={
     'precipitacion_60d_final': 'Precipitación estimada acumulada últimos 60 días (mm)',
     'radiacion_60d_final': 'Radiación estimada acumulada últimos 60 días (Wh/m²)',
 })
+
+# Reordenar columnas según preferencia del usuario
+cols = resumen.columns.tolist()
+
+# Seleccionar y reordenar
+
+orden_personalizado = [
+    'Semana',
+    'Ciclo',
+    'Temperatura media (°C)',
+    'Temperatura mínima (°C)',
+    'Temperatura máxima (°C)',
+    'Humedad media (%)',
+    'Viento promedio (km/h)',
+    'Precipitación máx. diaria (mm)',
+    'Radiación solar promedio (W/m²)',
+    'Precipitación estimada (mm)',
+    'Precipitación estimada acumulada últimos 60 días (mm)',
+    'Radiación estimada (Wh/m²)',
+    'Radiación estimada acumulada últimos 60 días (Wh/m²)',
+    'Grados-día calefacción (HDD)',
+    'HDD acumulado últimos 60 días',
+    'Días con heladas (< 4 °C)',
+    'Días soleados (Solar > 0 W/m²)'
+]
+
+# Reordenar solo si están todas las columnas
+resumen = resumen[[col for col in orden_personalizado if col in resumen.columns]]
+
 
 ##print(resumen[['Semana', 'HDD acumulado últimos 60 días']].head(140))
 
