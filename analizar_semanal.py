@@ -270,6 +270,52 @@ plt.tight_layout()
 plt.savefig('grafico_hdd_60d.png')
 plt.close()
 
+fig, ax1 = plt.subplots(figsize=(14, 7))
+
+# Eje principal: Precipitación
+color1 = 'blue'
+ax1.set_xlabel('Semana')
+ax1.set_ylabel('Precipitación (mm)', color=color1)
+ax1.plot(resumen['Semana'], resumen['Precipitación estimada acumulada últimos 60 días (mm)'],
+         marker='o', color=color1, label='Precipitación')
+ax1.tick_params(axis='y', labelcolor=color1)
+
+# Segundo eje: Radiación
+ax2 = ax1.twinx()
+color2 = 'orange'
+ax2.set_ylabel('Radiación (Wh/m²)', color=color2)
+ax2.plot(resumen['Semana'], resumen['Radiación estimada acumulada últimos 60 días (Wh/m²)'],
+         marker='s', color=color2, label='Radiación')
+ax2.tick_params(axis='y', labelcolor=color2)
+
+# Tercer eje: HDD
+ax3 = ax1.twinx()
+color3 = 'green'
+ax3.spines.right.set_position(("axes", 1.12))  # desplaza el eje
+ax3.set_ylabel('HDD', color=color3)
+ax3.plot(resumen['Semana'], resumen['HDD acumulado últimos 60 días'],
+         marker='^', color=color3, label='HDD')
+ax3.tick_params(axis='y', labelcolor=color3)
+
+# Usar fechas en el eje X correctamente
+ax1.xaxis.set_tick_params(rotation=45)
+fig.autofmt_xdate()  # ajusta las etiquetas de fecha automáticamente
+
+# Título y leyenda
+plt.title('Comparativa: Acumulados 60 días - Precipitación, Radiación y HDD')
+
+# Leyenda combinada
+lines, labels = [], []
+for ax in [ax1, ax2, ax3]:
+    line, label = ax.get_legend_handles_labels()
+    lines += line
+    labels += label
+ax1.legend(lines, labels, loc='upper left')
+
+plt.tight_layout()
+plt.savefig('grafico_comparado_60d.png')
+plt.close()
+
 
 # Guardar en Excel
 from openpyxl import load_workbook
@@ -299,6 +345,12 @@ try:
         sheet_acum.add_image(img5, 'A30')
         sheet_acum.add_image(img6, 'A59')
 
+        # nueva hoja con las comparacion de las tres graficas
+        # Nueva hoja con gráfico comparativo acumulado 60 días
+        writer.book.create_sheet('Comparativa 60d')
+        sheet_comp = writer.book['Comparativa 60d']
+        img7 = Image('grafico_comparado_60d.png')
+        sheet_comp.add_image(img7, 'A1')   
 
         writer.book.save('resumen_semanal_clima.xlsx')
 
