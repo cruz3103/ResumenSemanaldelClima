@@ -317,44 +317,60 @@ plt.savefig('grafico_comparado_60d.png')
 plt.close()
 
 
-# Guardar en Excel
-from openpyxl import load_workbook
+# =====================
+# Guardar en Excel sin borrar otras hojas
+# =====================
+
+from openpyxl import load_workbook, Workbook
 from openpyxl.drawing.image import Image
+import os
+
+archivo_excel = 'resumen_semanal_clima.xlsx'
+
+# Ejemplos de DataFrames que ya deberías tener
+# resumen = pd.DataFrame(...)
+# descripcion = pd.DataFrame(...)
 
 try:
-    with pd.ExcelWriter('resumen_semanal_clima.xlsx', engine='openpyxl') as writer:
-        resumen.to_excel(writer, index=False, sheet_name='Resumen semanal')
-        descripcion.to_excel(writer, index=False, sheet_name='Descripción')
+    if os.path.exists(archivo_excel):
+        try:
+            wb = load_workbook(archivo_excel)
+        except Exception:
+            print("⚠ Archivo dañado, se creará uno nuevo.")
+            wb = Workbook()
+            if 'Sheet' in wb.sheetnames:
+                wb.remove(wb['Sheet'])
+            wb.save(archivo_excel)
+            wb = load_workbook(archivo_excel)
+    else:
+        wb = Workbook()
+        if 'Sheet' in wb.sheetnames:
+            wb.remove(wb['Sheet'])
+        wb.save(archivo_excel)
+        wb = load_workbook(archivo_excel)
 
-        writer.book.create_sheet('Gráficos')
-        sheet = writer.book['Gráficos']
-        img1 = Image('grafico_clima_barras.png')
-        img2 = Image('grafico_solar_barras.png')
-        img3 = Image('grafico_heladas_barras.png')
-        sheet.add_image(img1, 'A1')
-        sheet.add_image(img2, 'A30')
-        sheet.add_image(img3, 'A59')
+    # Guardar hojas con pandas
+    writer = pd.ExcelWriter(
+        archivo_excel,
+        engine='openpyxl',
+        mode='a',
+        if_sheet_exists='replace'
+    )
+    writer._book = wb  # Aquí sí asignamos el workbook abierto
+    resumen.to_excel(writer, index=False, sheet_name='Resumen semanal')
+    descripcion.to_excel(writer, index=False, sheet_name='Descripción')
+    writer.close()
 
-         # Nueva hoja con acumulados 60 días
-        writer.book.create_sheet('Acumulados 60d')
-        sheet_acum = writer.book['Acumulados 60d']
-        img4 = Image('grafico_precip_60d.png')
-        img5 = Image('grafico_radiacion_60d.png')
-        img6 = Image('grafico_hdd_60d.png')
-        sheet_acum.add_image(img4, 'A1')
-        sheet_acum.add_image(img5, 'A30')
-        sheet_acum.add_image(img6, 'A59')
+    # Insertar imagen en Comparativa 60d
+    wb = load_workbook(archivo_excel)
+    if 'Comparativa 60d' in wb.sheetnames:
+        wb.remove(wb['Comparativa 60d'])
+    ws_comp = wb.create_sheet('Comparativa 60d')
+    img = Image('grafico_comparado_60d.png')
+    ws_comp.add_image(img, 'A1')
+    wb.save(archivo_excel)
 
-        # nueva hoja con las comparacion de las tres graficas
-        # Nueva hoja con gráfico comparativo acumulado 60 días
-        writer.book.create_sheet('Comparativa 60d')
-        sheet_comp = writer.book['Comparativa 60d']
-        img7 = Image('grafico_comparado_60d.png')
-        sheet_comp.add_image(img7, 'A1')   
-
-        writer.book.save('resumen_semanal_clima.xlsx')
-
-    print("✅ Archivo actualizado con gráficos y resumen semanal.")
+    print("✅ Archivo generado correctamente.")
 
 except PermissionError:
-    print("❌ No se pudo guardar el archivo. Asegúrate de cerrar 'resumen_semanal_clima.xlsx'.")
+    print("❌ No se pudo guardar el archivo. Ciérralo antes de ejecutar el script.")
